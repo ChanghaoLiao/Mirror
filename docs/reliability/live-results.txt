@@ -1,0 +1,21 @@
+RELIABILITY round=1 read_ms=134 refresh_ms=87 messages=939
+RELIABILITY round=2 read_ms=86 refresh_ms=86 messages=939
+RELIABILITY round=3 read_ms=86 refresh_ms=86 messages=939
+RELIABILITY round=4 read_ms=85 refresh_ms=84 messages=939
+RELIABILITY round=5 read_ms=87 refresh_ms=86 messages=939
+RELIABILITY round=6 read_ms=85 refresh_ms=104 messages=939
+RELIABILITY round=7 read_ms=97 refresh_ms=86 messages=939
+RELIABILITY round=8 read_ms=84 refresh_ms=84 messages=939
+RELIABILITY round=9 read_ms=92 refresh_ms=87 messages=939
+RELIABILITY round=10 read_ms=85 refresh_ms=84 messages=939
+RELIABILITY round=11 read_ms=85 refresh_ms=84 messages=939
+RELIABILITY round=12 read_ms=84 refresh_ms=84 messages=939
+RELIABILITY round=13 read_ms=83 refresh_ms=83 messages=939
+RELIABILITY round=14 read_ms=85 refresh_ms=84 messages=939
+RELIABILITY round=15 read_ms=85 refresh_ms=85 messages=939
+RELIABILITY round=16 read_ms=84 refresh_ms=86 messages=939
+RELIABILITY round=17 read_ms=99 refresh_ms=85 messages=939
+RELIABILITY round=18 read_ms=85 refresh_ms=83 messages=939
+RELIABILITY round=19 read_ms=84 refresh_ms=86 messages=939
+RELIABILITY round=20 read_ms=85 refresh_ms=85 messages=939
+RELIABILITY_PASS real_reads=20 real_refreshes=20 no_manual_retry read-only no-content-export

@@ -1,0 +1,33 @@
+name: Bug report / 问题反馈
+description: Reproducible reading, window or setup problems / 可复现的读取、窗口或设置问题
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "Please use synthetic or redacted data. Do not attach real conversations, account information, credentials, IDs or state files. 请使用演示或脱敏内容，不要上传真实对话、账号、密钥、会话ID或状态文件。"
+  - type: input
+    id: versions
+    attributes:
+      label: Versions / 版本
+      description: Mirror, macOS and Codex CLI versions; chip type / 各版本及芯片类型
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction / 复现步骤
+      description: Include initial read vs refresh and bound vs unbound if relevant / 涉及读取时区分首次或刷新，涉及窗口时说明是否绑定
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior / 预期和实际表现
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Redacted evidence / 脱敏资料
+      description: Optional error message or screenshot; check titles, paths and backgrounds / 可选的错误或截图，检查标题、路径和背景

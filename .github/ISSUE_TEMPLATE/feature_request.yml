@@ -1,0 +1,19 @@
+name: Feature request / 功能建议
+description: Explain a reading workflow that Mirror could improve / 说明想改善的阅读流程
+title: "[Feature] "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Use case / 使用场景
+      description: What is difficult in your current workflow? / 当前流程哪里不方便？
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome / 希望的结果
+      description: Describe the behavior, not just the button / 描述希望实现的行为
+    validations:
+      required: true
