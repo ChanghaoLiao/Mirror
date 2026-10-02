@@ -1,0 +1,36 @@
+name: macOS CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-package:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Toolchain
+        run: xcrun swift --version
+      - name: Unit tests
+        run: bash scripts/swift.sh test -Xswiftc -warnings-as-errors
+      - name: Swift format
+        run: xcrun swift-format lint --strict --recursive Sources Tests Package.swift scripts/ReleaseScreenshots.swift
+      - name: Build and verify archive
+        run: |
+          bash scripts/build.sh
+          unzip -t dist/Mirror.zip
+          mkdir -p .build/ci-archive
+          ditto --norsrc -x -k dist/Mirror.zip .build/ci-archive
+          codesign --verify --strict .build/ci-archive/Mirror.app
+          cmp dist/Mirror.app/Contents/MacOS/Mirror .build/ci-archive/Mirror.app/Contents/MacOS/Mirror
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' .build/ci-archive/Mirror.app/Contents/Info.plist)" = '0.2.1'
