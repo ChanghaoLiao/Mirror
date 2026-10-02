@@ -41,11 +41,11 @@
 
 ## English
 
-On 2026-10-01,29 XCTest cases passed (17 Core,9 connection,3 adapter), together with a warnings-as-errors release build and native regressions for multiple windows, recovery, refresh, themes/languages and setup. A720-item fixture made31 far jumps with a maximum display update of 15.36ms and 27 realized blocks; this is not end-to-end latency.
+On 2026-10-01, 29 XCTest cases passed (17 Core, 9 connection, 3 adapter), together with a warnings-as-errors release build and native regressions for multiple windows, recovery, refresh, themes/languages and setup. A 720-item fixture made 31 far jumps with a maximum display update of 15.36 ms and 27 realized blocks; this is not end-to-end latency.
 
-Codex CLI 0.159.0 on Apple Silicon/macOS 26.4.1 served 20 full reads and 20 refreshes of a 939-item history, without manual retries. Both medians were85ms; read range 83–134ms, refresh range 83–104ms. Startup, list queries and rendering are excluded. Unpinned cache capacity was zero each round. The linked raw record contains only timing/counts, not titles, IDs or bodies.
+Codex CLI 0.159.0 on Apple Silicon/macOS 26.4.1 served 20 full reads and 20 refreshes of a 939-item history, without manual retries. Both medians were 85 ms; read range 83–134 ms, refresh range 83–104 ms. Startup, list queries and rendering are excluded. Unpinned cache capacity was zero each round. The linked raw record contains only timing/counts, not titles, IDs or bodies.
 
-Tests cover fragmented Chinese/emoji responses over 5MiB, EOF ordering, disconnects, deadlines, shared reconnects, cancellation, late replies, malformed/rejected responses and read-only rejection. Native refresh tests cover atomic content replacement, live anchors, coalescing, cache opens, independent cancellation, failure preservation and cold progress.
+Tests cover fragmented Chinese/emoji responses over 5 MiB, EOF ordering, disconnects, deadlines, shared reconnects, cancellation, late replies, malformed/rejected responses and read-only rejection. Native refresh tests cover atomic content replacement, live anchors, coalescing, cache opens, independent cancellation, failure preservation and cold progress.
 
 Distribution checks cover ZIP integrity, strict extracted signature validation, version/deployment target, arm64 and executable equality. The public snapshot excludes local history and private/internal files. Six screenshots use synthetic data; single windows are captured by ID, while the multiwindow scene captures and arranges running native view trees without recording the desktop.
 
