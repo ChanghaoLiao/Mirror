@@ -7,7 +7,7 @@ let package = Package(
     products: [.executable(name: "Mirror", targets: ["Mirror"])],
     targets: [
         .target(name: "MirrorCore"),
-        .executableTarget(name: "Mirror", dependencies: ["MirrorCore"]),
+        .executableTarget(name: "Mirror", dependencies: ["MirrorCore"], resources: [.copy("Resources")]),
         .testTarget(name: "MirrorCoreTests", dependencies: ["MirrorCore"]),
         .testTarget(name: "MirrorAppTests", dependencies: ["Mirror", "MirrorCore"]),
     ],

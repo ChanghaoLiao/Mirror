@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Mirror">
+  <rect width="512" height="512" rx="112" fill="#0E1417"/>
+  <rect x="76" y="112" width="216" height="248" rx="24" fill="#1B272C" stroke="#82D8FC" stroke-width="12"/>
+  <path d="M108 156h110M108 192h84" fill="none" stroke="#82D8FC" stroke-width="12" stroke-linecap="round"/>
+  <rect x="220" y="160" width="216" height="248" rx="24" fill="#F7FAFB"/>
+  <path d="M252 210h114M252 246h150M252 282h150M252 318h92" fill="none" stroke="#036B9D" stroke-width="12" stroke-linecap="round"/>
+</svg>

@@ -9,7 +9,7 @@ final class ConversationReader: NSScrollView {
         let messageID: String
         let index: Int
         let block: MarkdownBlock
-        let fontSize: CGFloat
+        var fontSize: CGFloat
         var frame = NSRect.zero
         var height: CGFloat = 80
         var measuredWidth: CGFloat = 0
@@ -55,7 +55,8 @@ final class ConversationReader: NSScrollView {
         documentView = document
         hasVerticalScroller = true
         autohidesScrollers = true
-        drawsBackground = true
+        drawsBackground = !MirrorPreferences.blackboard
+        contentView.drawsBackground = !MirrorPreferences.blackboard
         backgroundColor = Ocean.surface
         contentView.postsBoundsChangedNotifications = true
         observation = NotificationCenter.default.addObserver(
@@ -113,6 +114,23 @@ final class ConversationReader: NSScrollView {
         }
     }
 
+    /// Retain parsed slots, search matches, native selection and user-selected images.
+    func updateFontSize(_ size: Double) {
+        let size = CGFloat(size)
+        guard slots.contains(where: { $0.index >= 0 && $0.fontSize != size }) else { return }
+        let saved = anchor ?? visibleAnchor()
+        layingOut = true
+        for index in slots.indices where slots[index].index >= 0 {
+            slots[index].fontSize = size
+            slots[index].view?.updateFontSize(size)
+            slots[index].measuredWidth = 0
+        }
+        layingOut = false
+        updateViewport(keeping: saved)
+        anchor = saved ?? visibleAnchor()
+        onAnchor?(anchor)
+    }
+
     override func layout() {
         super.layout()
         guard contentSize.width > 0, abs(lastWidth - contentSize.width) > 0.5, !layingOut else { return }
@@ -122,7 +140,7 @@ final class ConversationReader: NSScrollView {
 
     private func positionSlots() {
         let width = contentSize.width
-        let margin: CGFloat = width < 350 ? 20 : 32
+        let margin: CGFloat = width < 350 ? 20 : MirrorPreferences.blackboard ? 46 : 32
         var y: CGFloat = 28
         for index in slots.indices {
             slots[index].frame = NSRect(

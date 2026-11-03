@@ -14,6 +14,12 @@ import MirrorCore
     var lastWorkspace: UUID?
     var report: ((String) -> Void)?
     var startupError: String?
+    var agentRevision = Int(Date().timeIntervalSince1970 * 1000)
+    var agentEnabled = !MirrorPreferences.defaults.bool(forKey: "mirror.agent.paused")
+    var applyingAgentCommand = false
+    var agentReceipts: [UUID: (AgentRequest, AgentResponse)] = [:]
+    var agentReceiptOrder: [UUID] = []
+    var agentHostResolver: (() -> (HostWindow?, String))?
     private var resolutions: [UUID: Task<Void, Never>] = [:]
     private var screenObserver: NSObjectProtocol?
     private(set) var phases: [UUID: WorkspacePhase] = [:]
@@ -59,12 +65,19 @@ import MirrorCore
         updateVisibility()
     }
 
-    func open(conversationID: String? = nil, messageID: String? = nil, fromSelection: Bool = false) {
+    @discardableResult
+    func open(
+        conversationID: String? = nil, messageID: String? = nil, fromSelection: Bool = false,
+        hostOverride: HostWindow? = nil, agentOrigin: Bool = false
+    ) -> UUID {
         monitor.refresh()
-        let host = monitor.lastHost
+        let host = agentOrigin ? hostOverride : monitor.lastHost
         let workspaceID: UUID
-        if let key = keyReference {
+        if let key = keyReference, !agentOrigin {
             workspaceID = key.state.workspaceID
+            if let host, monitor.bindings[workspaceID] == nil {
+                setBinding(host, workspaceID: workspaceID)
+            }
         } else if let host,
             let match = monitor.bindings.first(where: { CFEqual($0.value.element, host.element) })
         {
@@ -116,6 +129,7 @@ import MirrorCore
                     "Reading only. Enable host following from Setup & Permissions in Mirror’s menu.",
                     "只读模式。可从 Mirror 菜单的「设置与权限」开启窗口跟随。")
         }
+        if agentOrigin { windows[state.id]?.agentLoadInProgress = true }
         let referenceID = state.id
         resolutions[referenceID] = Task { [weak self] in
             guard let self, let reference = windows[referenceID], let host else { return }
@@ -166,6 +180,7 @@ import MirrorCore
                 reference.surface.controls.status.stringValue = error.localizedDescription
             }
         }
+        return state.id
     }
 
     func create(_ state: ReferenceState, focus: Bool) {
@@ -176,6 +191,12 @@ import MirrorCore
                 x: state.frame.x, y: state.frame.y, width: state.frame.width, height: state.frame.height)
             window.setFrame(frame, display: true)
             clamp(window)
+        }
+        controller.onManualAction = { [weak self] in self?.humanDidInteract() }
+        controller.onBind = { [weak self] in self?.bindLastWorkspace() }
+        controller.onUnbind = { [weak self] in
+            self?.humanDidInteract()
+            self?.removeBinding(workspaceID: state.workspaceID)
         }
         controller.onChange = { [weak self] in self?.scheduleSave() }
         controller.onDuplicate = { [weak self] copy in
@@ -207,7 +228,7 @@ import MirrorCore
         scheduleSave()
     }
 
-    private func clamp(_ window: NSWindow) {
+    func clamp(_ window: NSWindow) {
         let screen =
             NSScreen.screens.max { a, b in
                 let left = a.visibleFrame.intersection(window.frame)
@@ -228,6 +249,7 @@ import MirrorCore
     var keyReference: ReferenceWindow? { windows.values.first { $0.window === NSApp.keyWindow } }
 
     func bindLastWorkspace() {
+        humanDidInteract()
         monitor.refresh()
         guard monitor.trusted else {
             report?(
@@ -274,8 +296,16 @@ import MirrorCore
         for controller in windows.values {
             let workspaceID = controller.state.workspaceID
             let unbound = monitor.bindings[workspaceID] == nil
+            var workspaceContext = active
+            if case .host(let activeID) = active,
+                let activeHost = monitor.bindings[activeID], let ownHost = monitor.bindings[workspaceID],
+                CFEqual(activeHost.element, ownHost.element)
+            {
+                workspaceContext = .host(workspaceID)
+            }
             let phase = WorkspacePhase.resolve(
-                workspaceID: workspaceID, active: active, availability: monitor.availability(workspaceID))
+                workspaceID: workspaceID, active: workspaceContext,
+                availability: monitor.availability(workspaceID))
             phases[workspaceID] = phase
             controller.window?.subtitle =
                 unbound ? localized("Unbound · reading only", "未绑定 · 只读模式") : localizedPhase(phase)
@@ -312,6 +342,7 @@ import MirrorCore
     }
 
     func restoreHidden() {
+        if !applyingAgentCommand { humanDidInteract() }
         for controller in windows.values where controller.state.workspaceID == lastWorkspace {
             controller.state.collapsed = false
             controller.window?.makeKeyAndOrderFront(nil)
@@ -321,7 +352,7 @@ import MirrorCore
         scheduleSave()
     }
 
-    private func scheduleSave() {
+    func scheduleSave() {
         pendingSave?.cancel()
         let work = DispatchWorkItem { [weak self] in self?.saveNow() }
         pendingSave = work

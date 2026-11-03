@@ -1,4 +1,5 @@
 import AppKit
+import CoreText
 
 extension Notification.Name {
     static let mirrorPreferencesChanged = Notification.Name("Mirror.preferencesChanged")
@@ -7,6 +8,13 @@ extension Notification.Name {
 }
 
 enum MirrorPreferences {
+    static var blackboard: Bool {
+        get { defaults.string(forKey: "mirror.ui.readingStyle") != "classic" }
+        set {
+            defaults.set(newValue ? "blackboard" : "classic", forKey: "mirror.ui.readingStyle")
+            changed()
+        }
+    }
     static let defaults: UserDefaults =
         ProcessInfo.processInfo.environment["MIRROR_PREFS_SUITE"]
         .flatMap(UserDefaults.init(suiteName:)) ?? .standard
@@ -29,7 +37,7 @@ enum MirrorPreferences {
     }
     static func applyAppearance() {
         NSApp.appearance =
-            appearance == "dark"
+            blackboard || appearance == "dark"
             ? NSAppearance(named: .darkAqua)
             : appearance == "light" ? NSAppearance(named: .aqua) : nil
     }
@@ -46,7 +54,17 @@ func localized(_ english: String, _ chinese: String) -> String {
 enum Ocean {
     private static func color(_ name: String, _ light: UInt32, _ dark: UInt32) -> NSColor {
         NSColor(name: NSColor.Name("Mirror." + name)) { appearance in
-            let value = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light
+            let board: [String: UInt32] = [
+                "canvas": 0x202020, "surface": 0x242424, "subtle": 0x30302E,
+                "text": 0xE9E6DF, "secondary": 0xB7B3A9, "border": 0x68645B,
+                "divider": 0x57554F, "accent": 0xF1D374, "accentText": 0xF1D374,
+                "accentSoft": 0x39362A, "onAccent": 0x25231D, "selection": 0x57503A,
+                "danger": 0xF69B88,
+            ]
+            let value =
+                MirrorPreferences.blackboard
+                ? (board[name] ?? dark)
+                : appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light
             return NSColor(
                 srgbRed: CGFloat((value >> 16) & 255) / 255,
                 green: CGFloat((value >> 8) & 255) / 255, blue: CGFloat(value & 255) / 255, alpha: 1)
@@ -68,11 +86,13 @@ enum Ocean {
 }
 
 class OceanView: NSView {
+    var showsBlackboard = false
     var fill: NSColor = Ocean.surface { didSet { needsDisplay = true } }
     override var isFlipped: Bool { true }
     override func draw(_ dirtyRect: NSRect) {
         fill.setFill()
         bounds.fill()
+        if showsBlackboard && MirrorPreferences.blackboard { BlackboardMaterial.draw(in: bounds) }
     }
 }
 
@@ -92,6 +112,10 @@ final class OceanButton: NSButton {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
     override var isOpaque: Bool { false }
     override var acceptsFirstResponder: Bool { isEnabled }
+    override func becomeFirstResponder() -> Bool {
+        alphaValue = 1
+        return super.becomeFirstResponder()
+    }
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         if let tracking { removeTrackingArea(tracking) }

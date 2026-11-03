@@ -234,7 +234,7 @@ actor CodexConnection: HistoryConnection {
         _ = try await send(
             "initialize",
             [
-                "clientInfo": .object(["name": .string("mirror"), "version": .string("0.2.1")]),
+                "clientInfo": .object(["name": .string("mirror"), "version": .string("1.0.0")]),
                 "capabilities": .object(["experimentalApi": .bool(true)]),
             ], epoch: epoch, deadline: ProcessInfo.processInfo.systemUptime + configuration.handshakeTimeout)
         try Task.checkCancellation()

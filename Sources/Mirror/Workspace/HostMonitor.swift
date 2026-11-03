@@ -80,6 +80,43 @@ struct HostWindow {
         onChange?()
     }
 
+    // An Agent must not guess between multiple background host windows.
+    func automaticHost() -> (HostWindow?, String) {
+        guard trusted else { return (nil, "permission_required") }
+        if let app = NSWorkspace.shared.frontmostApplication,
+            Self.bundles.contains(app.bundleIdentifier ?? ""),
+            let focused = focusedWindow(pid: app.processIdentifier)
+        {
+            return (
+                HostWindow(
+                    element: focused, pid: app.processIdentifier,
+                    title: string(focused, kAXTitleAttribute),
+                    bundleID: app.bundleIdentifier ?? ""), "bound"
+            )
+        }
+        var candidates: [HostWindow] = []
+        for app in NSWorkspace.shared.runningApplications
+        where Self.bundles.contains(app.bundleIdentifier ?? "") {
+            let candidatesInApp =
+                value(AXUIElementCreateApplication(app.processIdentifier), kAXWindowsAttribute)
+                as? [AXUIElement] ?? []
+            guard candidatesInApp.count <= 1 else { return (nil, "ambiguous_host") }
+            for window in candidatesInApp {
+                guard string(window, kAXSubroleAttribute) == (kAXStandardWindowSubrole as String),
+                    value(window, kAXMinimizedAttribute) as? Bool == false
+                else { continue }
+                candidates.append(
+                    HostWindow(
+                        element: window, pid: app.processIdentifier,
+                        title: string(window, kAXTitleAttribute),
+                        bundleID: app.bundleIdentifier ?? ""))
+            }
+        }
+        return candidates.count == 1
+            ? (candidates[0], "bound")
+            : (nil, candidates.isEmpty ? "host_not_found" : "ambiguous_host")
+    }
+
     func currentContext(referenceWorkspace: UUID?) -> ActiveContext {
         // AppKit activation can precede NSWorkspace's frontmost-process notification.
         if NSApp.isActive { return referenceWorkspace.map(ActiveContext.reference) ?? .unrelated }
@@ -183,6 +220,7 @@ struct HostWindow {
     }
     private func value(_ element: AXUIElement, _ name: String) -> CFTypeRef? {
         var result: CFTypeRef?
+        AXUIElementSetMessagingTimeout(element, 0.2)
         guard AXUIElementCopyAttributeValue(element, name as CFString, &result) == .success else {
             return nil
         }

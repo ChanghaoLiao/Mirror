@@ -25,19 +25,21 @@ final class ReadingBlock: NSView {
     private var imageButton: NSButton?
     var previewImage: NSImage? { imageView?.image }
     var onGeometryChange: (() -> Void)?
-    private let intrinsicWidth: CGFloat
+    private var intrinsicWidth: CGFloat
+    private var readingFontSize: CGFloat
     override var isFlipped: Bool { true }
 
     init(messageID: String, index: Int, block: MarkdownBlock, fontSize: CGFloat) {
         self.messageID = messageID
         self.index = index
+        readingFontSize = fontSize
         var quoted = false
         var literal = false
         var scrolling = false
         var size = fontSize
         var text = ""
         var weight = NSFont.Weight.regular
-        var color = index == -1 ? Ocean.accentText : Ocean.text
+        var color = index == -1 ? Ocean.secondary : Ocean.text
         let localImage: NSImage? = nil
         var isImage = false
         switch block {
@@ -90,7 +92,7 @@ final class ReadingBlock: NSView {
             ]
             view.selectedTextAttributes = [.backgroundColor: Ocean.selection, .foregroundColor: Ocean.text]
             view.textContainerInset = NSSize(width: quoted ? 16 : 0, height: quoted ? 12 : 3)
-            if quoted {
+            if quoted && !MirrorPreferences.blackboard {
                 view.drawsBackground = true
                 view.backgroundColor = Ocean.subtle
             }
@@ -99,7 +101,7 @@ final class ReadingBlock: NSView {
             let font =
                 literal
                 ? NSFont.monospacedSystemFont(ofSize: size, weight: weight)
-                : NSFont.systemFont(ofSize: size, weight: weight)
+                : BlackboardMaterial.font(size: size, weight: weight)
             let attributed = Self.attributed(text, font: font, color: color, literal: literal)
             view.textStorage?.setAttributedString(attributed)
             view.setAccessibilityLabel(text)
@@ -197,6 +199,37 @@ final class ReadingBlock: NSView {
         return text
     }
 
+    /// Change typography on the existing attributed text; do not parse Markdown again.
+    func updateFontSize(_ size: CGFloat) {
+        let delta = size - readingFontSize
+        guard delta != 0, index >= 0, let storage = textView?.textStorage else { return }
+        readingFontSize = size
+        let range = NSRange(location: 0, length: storage.length)
+        var fonts: [(NSRange, NSFont)] = []
+        var paragraphs: [(NSRange, NSParagraphStyle)] = []
+        storage.enumerateAttribute(.font, in: range) { value, range, _ in
+            if let font = value as? NSFont { fonts.append((range, font)) }
+        }
+        storage.enumerateAttribute(.paragraphStyle, in: range) { value, range, _ in
+            if let paragraph = value as? NSParagraphStyle { paragraphs.append((range, paragraph)) }
+        }
+        storage.beginEditing()
+        for (range, font) in fonts {
+            storage.addAttribute(
+                .font, value: NSFontManager.shared.convert(font, toSize: font.pointSize + delta), range: range
+            )
+        }
+        if MirrorPreferences.blackboard {
+            for (range, paragraph) in paragraphs {
+                let updated = paragraph.mutableCopy() as! NSMutableParagraphStyle
+                updated.lineSpacing = max(0, paragraph.lineSpacing + delta * 0.32)
+                storage.addAttribute(.paragraphStyle, value: updated, range: range)
+            }
+        }
+        storage.endEditing()
+        if horizontal != nil { intrinsicWidth = ceil(storage.size().width) + 24 }
+    }
+
     func arrange(width: CGFloat) -> CGFloat {
         if let imageView, let image = imageView.image {
             let height = min(500, width * image.size.height / max(1, image.size.width))
@@ -239,14 +272,23 @@ final class ReadingBlock: NSView {
         -> NSAttributedString
     {
         let paragraph = NSMutableParagraphStyle()
-        paragraph.lineSpacing = 4
+        paragraph.lineSpacing = MirrorPreferences.blackboard ? font.pointSize * 0.32 : 4
         var result = NSMutableAttributedString(string: text)
+        var emphasis: [NSRange] = []
         if !literal,
             let markdown = try? AttributedString(
                 markdown: text,
                 options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))
         {
             result = NSMutableAttributedString(attributedString: NSAttributedString(markdown))
+            var offset = 0
+            for run in markdown.runs {
+                let length = (String(markdown[run.range].characters) as NSString).length
+                if run.inlinePresentationIntent?.contains(.stronglyEmphasized) == true {
+                    emphasis.append(NSRange(location: offset, length: length))
+                }
+                offset += length
+            }
         }
         let range = NSRange(location: 0, length: result.length)
         result.enumerateAttribute(.link, in: range) { value, linkRange, _ in
@@ -258,12 +300,31 @@ final class ReadingBlock: NSView {
         }
         result.addAttributes(
             [.font: font, .foregroundColor: color, .paragraphStyle: paragraph], range: range)
+        if MirrorPreferences.blackboard {
+            for range in emphasis {
+                result.addAttribute(.foregroundColor, value: Ocean.accentText, range: range)
+            }
+        }
+        // The Chinese handwritten face has compact Latin glyphs. Use the system chalk face
+        // for Latin passages and numbers so English histories remain readable at the same size.
+        if MirrorPreferences.blackboard, !literal,
+            let latin = NSFont(name: "ChalkboardSE-Regular", size: font.pointSize),
+            let expression = try? NSRegularExpression(pattern: "[\\x{0000}-\\x{024F}]+")
+        {
+            for match in expression.matches(in: result.string, range: range) {
+                result.addAttribute(.font, value: latin, range: match.range)
+            }
+        }
         if !literal {
             result.enumerateAttribute(.inlinePresentationIntent, in: range) { value, range, _ in
                 guard let intent = value as? InlinePresentationIntent else { return }
-                var styled = font
+                var styled =
+                    (result.attribute(.font, at: range.location, effectiveRange: nil) as? NSFont) ?? font
                 if intent.contains(.stronglyEmphasized) {
                     styled = NSFontManager.shared.convert(styled, toHaveTrait: .boldFontMask)
+                    if MirrorPreferences.blackboard {
+                        result.addAttribute(.foregroundColor, value: Ocean.accentText, range: range)
+                    }
                 }
                 if intent.contains(.emphasized) {
                     styled = NSFontManager.shared.convert(styled, toHaveTrait: .italicFontMask)

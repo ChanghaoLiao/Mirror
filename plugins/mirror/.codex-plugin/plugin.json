@@ -1,0 +1,63 @@
+{
+  "name": "mirror",
+  "version": "1.0.0",
+  "description": "Independent local Agent tools for read-only Codex references. Deterministic Mirror operations without embedded model calls.",
+  "author": {
+    "name": "Changhao Liao",
+    "url": "https://github.com/ChanghaoLiao"
+  },
+  "homepage": "https://github.com/ChanghaoLiao/Mirror",
+  "repository": "https://github.com/ChanghaoLiao/Mirror",
+  "license": "MIT",
+  "keywords": [
+    "agent-tools",
+    "zero-token",
+    "skill",
+    "codex",
+    "macos",
+    "reference"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Mirror · Agent Tools",
+    "shortDescription": "Local reference tools",
+    "longDescription": "Use Mirror as an independent local tool for read-only Codex history. A compatible Mac-side Agent can open or reuse references, find text, refresh, arrange windows and bind an unambiguous Codex host. Deterministic operations have no embedded model calls or Mirror API key. The host Agent may still consume tokens for reasoning and tool context. Includes shell skills and optional strict function-call schemas with a Python 3.9+ local adapter. Requires Apple Silicon, macOS 14+ and separately installed Mirror desktop 1.0.0+. The controller may be another local Agent; history remains Codex-only. Human actions take priority; system permissions remain manual. No hosted service, conversation rewriting or AI task creation. Cloud-only ChatGPT cannot control this Mac. Independent project; not an OpenAI product or endorsement.",
+    "developerName": "Changhao Liao",
+    "category": "Productivity",
+    "capabilities": [
+      "Manage local references",
+      "Follow Codex windows",
+      "Respect human control"
+    ],
+    "websiteURL": "https://github.com/ChanghaoLiao/Mirror",
+    "supportURL": "https://github.com/ChanghaoLiao/Mirror/issues",
+    "privacyPolicyURL": "https://github.com/ChanghaoLiao/Mirror/blob/main/docs/privacy.en.md",
+    "defaultPrompt": [
+      "Keep this Codex conversation beside my work.",
+      "Find the product plan in my Mirror reference.",
+      "Help me set up Mirror on this Mac."
+    ],
+    "brandColor": "#57503A",
+    "brandColorDark": "#F1D374",
+    "composerIcon": "./assets/icon.svg",
+    "logo": "./assets/icon.svg",
+    "screenshots": [
+      "./assets/multiwindow-light.png",
+      "./assets/find.png"
+    ]
+  },
+  "extensions": {
+    "com.openai": {
+      "onboardingSkill": "./skills/mirror-setup/SKILL.md",
+      "publication": {
+        "release_notes": "Mirror Agent Tools 1.0.0 adds a standalone local toolkit and 15 strict function-call schemas with an optional Python adapter. It reuses the existing desktop 1.0.0 command service. Mirror operations do not call a model; host reasoning and tool context may still consume tokens. Independent local delivery, not a claim of official listing.",
+        "translations": {
+          "zh-CN": {
+            "subtitle": "把历史留在工作旁边",
+            "description": "独立的本地 Agent 小技能与 Function Calling 工具。Agent 理解需求，Mirror 用本地代码打开、复用、查找、刷新和排列只读参考窗，不内置模型调用或 API Key。宿主 Agent 的推理与工具上下文仍可能消耗 Token。控制方可为具备 Mac 本机执行能力的 Agent；历史数据源仍仅支持 Codex。需要 M 系列 Mac、macOS 14+ 和单独安装的 Mirror 桌面端1.0.0+。人工操作优先，系统权限由人授权；普通云端 ChatGPT 不能直接控制本机。独立项目，非 OpenAI 官方产品或背书。"
+          }
+        }
+      }
+    }
+  }
+}

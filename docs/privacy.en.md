@@ -6,11 +6,13 @@ Mirror has no telemetry, upload service, built-in account or model calls. It sta
 
 ## Stored data
 
-Conversation bodies stay in memory and are shared by source ID, without a Mirror disk cache. Inactive snapshots are limited to8 entries and 32MiB of source text; active sources are excluded. This is not a total process memory limit.
+Conversation bodies stay in memory and are shared by source ID, without a Mirror disk cache. Inactive snapshots are limited to 8 entries and 32MiB of source text; active sources are excluded. Closing the relevant references or quitting Mirror releases this in-memory content. This is not a total process memory limit.
 
-`~/Library/Application Support/Mirror/state.json` holds window geometry, font settings, conversation IDs, message/character anchors, workspace metadata and host titles. These identifiers can reveal which histories you viewed. **Do not upload the file to an issue.** Writes are atomic with mode0600; corrupt/unsupported files are preserved and saving stops for that run.
+`~/Library/Application Support/Mirror/state.json` holds window geometry, font settings, conversation IDs, message/character anchors, workspace metadata and host titles. These identifiers can reveal which histories you viewed. **Do not upload the file to an issue.** Metadata remains until the user closes the corresponding references, resets state, or uninstalls and removes the file; Mirror keeps no cloud copy. Writes are atomic with mode 0600; corrupt/unsupported files are preserved and saving stops for that run.
 
-Appearance/language, the selected Codex path and first-run completion are kept in macOS UserDefaults. Image previews remain in the reference's memory, without stored preview copies. Closing references releases unneeded data.
+Appearance/language, the selected Codex path and first-run completion are kept in macOS UserDefaults until the user resets preferences or removes the local data. Image previews remain in the reference's memory, without stored preview copies. Closing references releases unneeded data.
+
+Mirror does not send conversations, the metadata above, or usage analytics to the maintainer, advertisers, data brokers or other third parties. Links explicitly clicked by the user are handled by the system browser. Content a user submits to GitHub Issues is processed by GitHub under its own policies.
 
 ## Permissions and attachments
 

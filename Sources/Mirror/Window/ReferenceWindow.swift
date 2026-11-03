@@ -13,6 +13,12 @@ final class ReferenceSurface: OceanView {
     let switchButton = oceanButton("", target: nil, action: nil)
     let findButton = oceanButton("", target: nil, action: nil)
     let moreButton = oceanButton("•••", target: nil, action: nil)
+    private var quickTools: [OceanButton] = []
+    private var tracking: NSTrackingArea?
+    private var opening: BlackboardOpening?
+    private var didOpen = false
+    private var edgeHovered = false
+    private let brand = NSTextField(labelWithString: "Mirror")
     private let footer = OceanView()
     private let snapshot = NSTextField(labelWithString: "")
     private let activityPanel = OceanView()
@@ -27,6 +33,9 @@ final class ReferenceSurface: OceanView {
     override init(frame: NSRect) {
         super.init(frame: frame)
         addSubview(reader)
+        brand.font = .systemFont(ofSize: 12, weight: .medium)
+        brand.textColor = Ocean.secondary
+        addSubview(brand)
         for button in [switchButton, findButton, moreButton] {
             addSubview(button)
             button.target = self
@@ -34,6 +43,12 @@ final class ReferenceSurface: OceanView {
         switchButton.action = #selector(showConversations)
         findButton.action = #selector(showFind)
         moreButton.action = #selector(showActions)
+        for (id, title) in [("refresh", "↻"), ("copy", "⧉"), ("smaller", "A−"), ("larger", "A+")] {
+            let button = oceanButton(title, target: self, action: #selector(quickAction(_:)))
+            button.identifier = NSUserInterfaceItemIdentifier(id)
+            addSubview(button)
+            quickTools.append(button)
+        }
         overlay.documentView = controls
         overlay.hasVerticalScroller = true
         overlay.autohidesScrollers = true
@@ -64,6 +79,19 @@ final class ReferenceSurface: OceanView {
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
     func localize() {
+        reader.drawsBackground = !MirrorPreferences.blackboard
+        reader.contentView.drawsBackground = !MirrorPreferences.blackboard
+        reader.backgroundColor = Ocean.surface
+        for (button, labels) in zip(
+            quickTools,
+            [
+                ("Refresh", "刷新对话"), ("Copy message", "复制当前完整消息"), ("Smaller text", "缩小字号"),
+                ("Larger text", "放大字号"),
+            ])
+        {
+            button.toolTip = localized(labels.0, labels.1)
+            button.setAccessibilityLabel(button.toolTip)
+        }
         switchButton.title = localized("Conversations", "切换会话")
         findButton.title = localized("Find  ⌘F", "查找  ⌘F")
         cancel.title = localized("Cancel reading", "取消读取")
@@ -75,6 +103,60 @@ final class ReferenceSurface: OceanView {
         controls.localize()
         needsLayout = true
         needsDisplay = true
+        updateTools()
+    }
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let tracking { removeTrackingArea(tracking) }
+        let area = NSTrackingArea(
+            rect: .zero, options: [.mouseMoved, .mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+            owner: self)
+        addTrackingArea(area)
+        tracking = area
+    }
+    override func mouseMoved(with event: NSEvent) {
+        edgeHovered = convert(event.locationInWindow, from: nil).y > bounds.height - 88
+        updateTools()
+    }
+    override func mouseEntered(with event: NSEvent) { mouseMoved(with: event) }
+    override func mouseExited(with event: NSEvent) {
+        edgeHovered = false
+        updateTools()
+    }
+    private func updateTools() {
+        let visible =
+            !MirrorPreferences.blackboard || edgeHovered || controlsVisible
+            || ([switchButton, findButton] + quickTools).contains { window?.firstResponder === $0 }
+        for button in [switchButton, findButton] + quickTools {
+            button.alphaValue = visible ? 1 : 0
+            button.isHidden =
+                quickTools.contains(button) && (!MirrorPreferences.blackboard || bounds.width < 520)
+        }
+        footer.isHidden = MirrorPreferences.blackboard
+        brand.isHidden = !MirrorPreferences.blackboard
+    }
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard window != nil, !didOpen else { return }
+        didOpen = true
+        let flourish = BlackboardOpening(frame: bounds)
+        flourish.autoresizingMask = [.width, .height]
+        addSubview(flourish)
+        opening = flourish
+        flourish.start()
+    }
+    override func mouseDown(with event: NSEvent) {
+        opening?.skip()
+        let point = convert(event.locationInWindow, from: nil)
+        if MirrorPreferences.blackboard && (point.y < 28 || point.x < 20 || point.x > bounds.width - 20) {
+            window?.performDrag(with: event)
+        } else {
+            super.mouseDown(with: event)
+        }
+    }
+    @objc private func quickAction(_ sender: NSButton) {
+        onWillShowControls?()
+        controls.onAction?(sender.identifier?.rawValue ?? "")
     }
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
@@ -86,6 +168,10 @@ final class ReferenceSurface: OceanView {
     }
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
+        if MirrorPreferences.blackboard {
+            BlackboardMaterial.draw(in: bounds)
+            return
+        }
         Ocean.divider.setFill()
         NSRect(x: 0, y: 47, width: bounds.width, height: 1).fill()
     }
@@ -105,6 +191,7 @@ final class ReferenceSurface: OceanView {
         moreButton.frame = NSRect(x: bounds.width - 44, y: 8, width: 36, height: 32)
         footer.frame = NSRect(x: 0, y: bounds.height - 36, width: bounds.width, height: 36)
         snapshot.frame = NSRect(x: 12, y: 10, width: bounds.width - 24, height: 18)
+        controls.compactActions = MirrorPreferences.blackboard && bounds.width >= 520
         let width = min(
             controls.mode == .find ? bounds.width - 24 : controls.mode == .conversations ? 390 : 310,
             bounds.width - 24)
@@ -116,8 +203,26 @@ final class ReferenceSurface: OceanView {
             x: 12, y: 54, width: bounds.width - 24, height: cancel.isHidden ? 60 : 94)
         activity.frame = NSRect(x: 12, y: 10, width: bounds.width - 48, height: 44)
         cancel.frame = NSRect(x: 12, y: 56, width: min(180, bounds.width - 48), height: 32)
+        if MirrorPreferences.blackboard {
+            reader.frame = NSRect(
+                x: 22, y: 28, width: max(100, bounds.width - 44), height: max(90, bounds.height - 100))
+            let y = bounds.height - 66
+            switchButton.frame = NSRect(x: 35, y: y, width: 116, height: 34)
+            findButton.frame = NSRect(x: 156, y: y, width: 96, height: 34)
+            for (i, button) in quickTools.enumerated() {
+                button.frame = NSRect(x: 260 + CGFloat(i) * 44, y: y, width: 38, height: 34)
+                button.isHidden = bounds.width < 520
+            }
+            moreButton.frame = NSRect(x: bounds.width - 54, y: bounds.height - 32, width: 38, height: 28)
+            overlay.frame.origin = NSPoint(x: bounds.width - width - 32, y: 58)
+            activityPanel.frame.origin = NSPoint(x: 35, y: bounds.height - (cancel.isHidden ? 130 : 164))
+            activityPanel.frame.size.width = max(180, bounds.width - 70)
+        }
+        updateTools()
+        brand.frame = NSRect(x: 85, y: 5, width: 100, height: 18)
     }
     func showControls(_ mode: ReferenceControls.Mode = .actions) {
+        opening?.skip()
         onWillShowControls?()
         let wasHidden = overlay.isHidden
         controls.mode = mode
@@ -160,12 +265,15 @@ final class ReferenceSurface: OceanView {
         if controlsVisible && controls.mode == .actions { dismiss() } else { showControls(.actions) }
     }
     func dismiss() {
+        opening?.skip()
         let wasVisible = controlsVisible
         overlay.isHidden = true
         overlay.alphaValue = 1
         if wasVisible { window?.makeFirstResponder(trigger ?? reader) }
         onDismiss?()
+        updateTools()
     }
+    func skipOpening() { opening?.skip() }
 }
 
 @MainActor final class ReferenceWindow: NSWindowController, NSWindowDelegate {
@@ -180,14 +288,20 @@ final class ReferenceSurface: OceanView {
     var selectionRevision: Int { loadGeneration }
     private var loadTask: Task<Void, Never>?
     private var loadingConversationID: String?
+    var requestedConversationID: String? { loadingConversationID ?? state.conversationID }
     private var refreshingSnapshot = false
     private var selectedMessageID: String?
     private var preferenceObserver: NSObjectProtocol?
     private var closed = false
     private(set) var isLoading = false
+    private(set) var contentStatus = "empty"
     private var queryTask: Task<Void, Never>?
     private var cursor: String?
     private var queryGeneration = 0
+    var agentLoadInProgress = false
+    var onManualAction: (() -> Void)?
+    var onBind: (() -> Void)?
+    var onUnbind: (() -> Void)?
     var onChange: (() -> Void)?
     var onClose: ((UUID) -> Void)?
     var onDuplicate: ((ReferenceState) -> Void)?
@@ -202,9 +316,12 @@ final class ReferenceSurface: OceanView {
             contentRect: NSRect(
                 x: state.frame.x, y: state.frame.y,
                 width: state.frame.width, height: state.frame.height),
-            styleMask: [.titled, .closable, .resizable, .utilityWindow], backing: .buffered, defer: false)
+            styleMask: [
+                .titled, .closable, .miniaturizable, .resizable, .utilityWindow, .fullSizeContentView,
+            ], backing: .buffered, defer: false)
         panel.title = "Mirror"
         panel.titlebarAppearsTransparent = true
+        panel.titleVisibility = .hidden
         panel.backgroundColor = Ocean.subtle
         panel.minSize = NSSize(width: 280, height: 260)
         panel.isFloatingPanel = false
@@ -237,12 +354,22 @@ final class ReferenceSurface: OceanView {
                 if self.conversation == nil && self.state.conversationID == nil { self.showWelcome() }
             }
         }
-        surface.onCancel = { [weak self] in self?.cancelLoad() }
+        surface.onCancel = { [weak self] in
+            self?.onManualAction?()
+            self?.cancelLoad()
+        }
         surface.reader.onNotice = { [weak self] text in self?.surface.setActivity(text) }
-        surface.controls.onSelect = { [weak self] id in self?.load(id, anchor: nil) }
-        surface.controls.onQuery = { [weak self] query in self?.query(query) }
+        surface.controls.onSelect = { [weak self] id in
+            self?.onManualAction?()
+            self?.load(id, anchor: nil)
+        }
+        surface.controls.onQuery = { [weak self] query in
+            self?.onManualAction?()
+            self?.query(query)
+        }
         surface.controls.onSearch = { [weak self] query, next in
             guard let self else { return }
+            self.onManualAction?()
             self.surface.controls.status.stringValue = self.surface.reader.search(query, next: next)
         }
         surface.controls.onAction = { [weak self] action in self?.act(action) }
@@ -291,6 +418,7 @@ final class ReferenceSurface: OceanView {
         loadGeneration += 1
         let generation = loadGeneration
         isLoading = true
+        contentStatus = "loading"
         loadingConversationID = id
         refreshingSnapshot = backgroundRefresh
         selectedMessageID = nil
@@ -351,6 +479,12 @@ final class ReferenceSurface: OceanView {
                         "\(conversation.messages.count) items · local snapshot · ⌘R to update",
                         "\(conversation.messages.count) 条 · 本地快照 · ⌘R 刷新")
                 if !backgroundRefresh { self.surface.dismiss() }
+                self.contentStatus =
+                    anchor.map { target in
+                        conversation.messages.contains(where: { $0.id == target.messageID })
+                            ? "loaded" : "message_not_found"
+                    } ?? "loaded"
+                self.agentLoadInProgress = false
                 self.isLoading = false
                 self.loadingConversationID = nil
                 self.refreshingSnapshot = false
@@ -359,6 +493,8 @@ final class ReferenceSurface: OceanView {
                 self.onChange?()
             } catch {
                 guard let self, !self.closed, generation == self.loadGeneration else { return }
+                self.contentStatus = error is CancellationError ? "cancelled" : "failed"
+                self.agentLoadInProgress = false
                 self.isLoading = false
                 self.loadingConversationID = nil
                 self.refreshingSnapshot = false
@@ -386,6 +522,8 @@ final class ReferenceSurface: OceanView {
     }
 
     func cancelLoad() {
+        contentStatus = "cancelled"
+        agentLoadInProgress = false
         let preserved = refreshingSnapshot
         loadGeneration += 1
         loadTask?.cancel()
@@ -433,7 +571,10 @@ final class ReferenceSurface: OceanView {
     }
 
     func act(_ action: String) {
+        onManualAction?()
         switch action {
+        case "bind": onBind?()
+        case "unbind": onUnbind?()
         case "preferences":
             NotificationCenter.default.post(name: .mirrorShowPreferences, object: nil)
         case "setup":
@@ -468,15 +609,25 @@ final class ReferenceSurface: OceanView {
             if let id = state.conversationID { load(id, anchor: surface.reader.anchor, refresh: true) }
             query(surface.controls.conversationSearch.stringValue)
         case "smaller", "larger":
-            state.settings.fontSize = min(
-                26, max(11, state.settings.fontSize + (action == "larger" ? 1 : -1)))
-            if let conversation {
-                surface.reader.show(conversation, settings: state.settings, anchor: state.anchor)
-            }
-            onChange?()
+            setFontSize(state.settings.fontSize + (action == "larger" ? 1 : -1))
         default: break
         }
     }
+    func setFontSize(_ size: Double) {
+        let size = min(26, max(11, size))
+        guard state.settings.fontSize != size else { return }
+        state.settings.fontSize = size
+        surface.reader.updateFontSize(size)
+        state.anchor = surface.reader.anchor
+        onChange?()
+    }
+
+    func relinquishAgentLoad() {
+        guard agentLoadInProgress else { return }
+        agentLoadInProgress = false
+        if isLoading { cancelLoad() }
+    }
+
     func find() {
         surface.showControls(.find)
         window?.makeFirstResponder(surface.controls.search)
@@ -499,6 +650,7 @@ final class ReferenceSurface: OceanView {
     }
     func windowDidBecomeKey(_ notification: Notification) { onActivate?() }
     func windowWillClose(_ notification: Notification) {
+        onManualAction?()
         if let preferenceObserver { NotificationCenter.default.removeObserver(preferenceObserver) }
         preferenceObserver = nil
         closed = true

@@ -45,18 +45,46 @@ import AppKit
         state.access = true
         setup.refresh()
         require(contains("已授权窗口跟随"), "grant reflected by recheck")
-        require(contains("请打开并点击一次 Codex"), "missing host is not missing permission")
+        require(contains("请打开 Codex，Agent 会选择明确的窗口"), "missing host is not missing permission")
         state.host = true
         setup.refresh()
         require(contains("已发现 Codex 窗口"), "ready host")
         state.access = false
         setup.refresh()
-        require(contains("尚未授权"), "revocation reflected")
+        require(contains("当前版本尚未获得有效授权"), "revocation reflected")
         require(requested == 0, "no automatic permission prompts")
         setup.close()
         setup.close()
         require(completed == 1, "finish once on dismissal")
-        print("SETUP_PASS missing-cli read-only grant host revocation no-auto-prompt close-once")
+        let suite = "MirrorSetupVerification.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let old = AccessibilityDiagnostics(
+            identity: .init(codeHash: "old", adHoc: true, appURL: Bundle.main.bundleURL), defaults: defaults)
+        _ = old.observe(granted: true)
+        let current = AccessibilityDiagnostics(
+            identity: .init(codeHash: "new", adHoc: true, appURL: Bundle.main.bundleURL), defaults: defaults)
+        let diagnosticSetup = SetupWindow(
+            check: { state }, requestPermission: { requested += 1 }, chooseCLI: {}, finish: {},
+            diagnostics: current)
+        func diagnosticContains(_ text: String) -> Bool {
+            diagnosticSetup.window?.contentView?.subviews.contains {
+                ($0 as? NSTextField)?.stringValue.contains(text) == true || ($0 as? NSButton)?.title == text
+            } == true
+        }
+        require(diagnosticContains("当前开发版本与上次授权版本不同"), "development identity change explained")
+        require(diagnosticContains("在 Finder 中定位当前 Mirror"), "exact app recovery entry")
+        state.access = true
+        diagnosticSetup.refresh()
+        require(diagnosticContains("已授权窗口跟随"), "new grant overrides diagnostic history")
+        state.access = false
+        diagnosticSetup.refresh()
+        require(diagnosticContains("之前获得的窗口跟随权限已失效"), "revocation differs from first setup")
+        require(requested == 0, "diagnostics never request permission")
+        diagnosticSetup.close()
+        print(
+            "SETUP_PASS missing-cli read-only grant host revocation no-auto-prompt close-once identity-recovery"
+        )
         NSApp.terminate(nil)
     }
 }

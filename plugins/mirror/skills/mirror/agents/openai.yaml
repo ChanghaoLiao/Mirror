@@ -1,0 +1,4 @@
+interface:
+  display_name: "Mirror · Local reference tool"
+  short_description: "Keep Codex history beside work with local tools"
+  default_prompt: "Use $mirror to open this Codex conversation in a reference window."

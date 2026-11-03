@@ -45,13 +45,13 @@ public struct ReadingAnchor: Codable, Equatable, Sendable {
 public struct WindowFrame: Codable, Equatable, Sendable {
     public var x: Double = 100
     public var y: Double = 100
-    public var width: Double = 490
-    public var height: Double = 650
+    public var width: Double = 1120
+    public var height: Double = 590
     public init() {}
 }
 
 public struct ReadingSettings: Codable, Equatable, Sendable {
-    public var fontSize: Double = 15
+    public var fontSize: Double = 23
     public init() {}
 }
 

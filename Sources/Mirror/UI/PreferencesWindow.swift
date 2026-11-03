@@ -1,13 +1,16 @@
 import AppKit
 
 @MainActor final class PreferencesWindow: NSWindowController {
+    private var didOpen = false
     private var observer: NSObjectProtocol?
     init() {
         let panel = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 490, height: 620), styleMask: [.titled, .closable],
+            contentRect: NSRect(x: 0, y: 0, width: 490, height: 620),
+            styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered, defer: false)
         panel.isReleasedWhenClosed = false
         panel.titlebarAppearsTransparent = true
+        panel.titleVisibility = .hidden
         super.init(window: panel)
         rebuild()
         observer = NotificationCenter.default.addObserver(
@@ -22,10 +25,15 @@ import AppKit
     func present() {
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
+        if !didOpen, let view = window?.contentView {
+            didOpen = true
+            BlackboardOpening.show(in: view)
+        }
     }
     private func rebuild() {
         let focused = (window?.firstResponder as? NSView)?.identifier
         let view = OceanView(frame: NSRect(x: 0, y: 0, width: 490, height: 620))
+        view.showsBlackboard = true
         window?.contentView = view
         window?.title = localized("Mirror · Appearance & Language", "Mirror · 外观与语言")
         window?.backgroundColor = Ocean.subtle
@@ -53,7 +61,15 @@ import AppKit
             b.frame = NSRect(x: 32 + CGFloat(i) * 144, y: 134, width: 138, height: 32)
             view.addSubview(b)
         }
-        label("Ocean · 碧海蓝", 186, 20, 11)
+        for (i, entry) in [
+            ("blackboard", localized("Blackboard", "黑板")), ("classic", localized("Classic", "经典")),
+        ].enumerated() {
+            let button = oceanButton(entry.1, target: self, action: #selector(changeReadingStyle(_:)))
+            button.identifier = NSUserInterfaceItemIdentifier(entry.0)
+            button.kind = (MirrorPreferences.blackboard == (entry.0 == "blackboard")) ? .selected : .quiet
+            button.frame = NSRect(x: 32 + CGFloat(i) * 217, y: 178, width: 209, height: 32)
+            view.addSubview(button)
+        }
         label(localized("Interface language", "界面语言 / Language"), 250, 24, 16, true)
         for (i, entry) in [("zh", "简体中文"), ("en", "English")].enumerated() {
             let b = oceanButton(entry.1, target: self, action: #selector(changeLanguage(_:)))
@@ -83,6 +99,9 @@ import AppKit
     }
     @objc private func changeAppearance(_ sender: NSButton) {
         MirrorPreferences.appearance = sender.identifier!.rawValue
+    }
+    @objc private func changeReadingStyle(_ sender: NSButton) {
+        MirrorPreferences.blackboard = sender.identifier?.rawValue == "blackboard"
     }
     @objc private func changeLanguage(_ sender: NSButton) {
         MirrorPreferences.language = sender.identifier!.rawValue

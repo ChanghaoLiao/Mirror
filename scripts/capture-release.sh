@@ -12,7 +12,8 @@ fi
 export CLANG_MODULE_CACHE_PATH="$PWD/.build/ModuleCache"
 export SWIFT_MODULECACHE_PATH="$PWD/.build/ModuleCache"
 sources=()
-while IFS= read -r source; do sources+=("$source"); done < <(find Sources/Mirror -name '*.swift' ! -name main.swift | sort)
+while IFS= read -r source; do sources+=("$source"); done < <(find Sources/Mirror -name '*.swift' ! -name main.swift ! -name AppDelegate.swift | sort)
+sources+=(.build/release/Mirror.build/DerivedSources/resource_bundle_accessor.swift)
 xcrun swiftc -swift-version 5 -parse-as-library -target "$(uname -m)-apple-macos14.0" \
   -I .build/release/Modules .build/release/MirrorCore.build/*.o \
   "${sources[@]}" scripts/ReleaseScreenshots.swift -o .build/release-screenshots

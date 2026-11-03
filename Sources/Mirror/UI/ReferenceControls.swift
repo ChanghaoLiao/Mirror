@@ -19,7 +19,17 @@ final class ReferenceControls: OceanView, NSSearchFieldDelegate, NSTableViewData
     var onSearch: ((String, Bool) -> Void)?
     var onSelect: ((String) -> Void)?
     var onAction: ((String) -> Void)?
-    var preferredHeight: CGFloat { mode == .find ? 116 : mode == .conversations ? 390 : 490 }
+    var compactActions = false { didSet { if oldValue != compactActions { updateMode() } } }
+    private var actionKeys: [String] {
+        let keys = [
+            "duplicate", "refresh", "copy", "smaller", "larger", "collapse", "preferences", "setup", "bind",
+            "unbind", "close", "dismiss",
+        ]
+        return compactActions ? keys.filter { !["refresh", "copy", "smaller", "larger"].contains($0) } : keys
+    }
+    var preferredHeight: CGFloat {
+        mode == .find ? 116 : mode == .conversations ? 390 : CGFloat(130 + actionKeys.count * 36)
+    }
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -52,7 +62,7 @@ final class ReferenceControls: OceanView, NSSearchFieldDelegate, NSTableViewData
         more.isHidden = true
         for action in [
             "next", "clear", "duplicate", "refresh", "copy", "smaller", "larger", "collapse", "preferences",
-            "setup", "close", "dismiss",
+            "setup", "bind", "unbind", "close", "dismiss",
         ] {
             let b = oceanButton("", target: self, action: #selector(performAction(_:)))
             if !["next", "clear", "dismiss"].contains(action) { b.textAlignment = .left }
@@ -75,6 +85,8 @@ final class ReferenceControls: OceanView, NSSearchFieldDelegate, NSTableViewData
             "smaller": localized("Smaller text", "缩小字号"), "larger": localized("Larger text", "放大字号"),
             "collapse": localized("Hide reference", "隐藏参考窗口"),
             "preferences": localized("Appearance & Language…", "外观与语言…"),
+            "bind": localized("Bind to Codex window", "绑定 Codex 窗口"),
+            "unbind": localized("Unbind this workspace", "解除此组窗口绑定"),
             "setup": localized("Setup & Permissions…", "设置与权限…"),
             "close": localized("Close reference  ⌘W", "关闭参考窗口  ⌘W"),
             "dismiss": localized("Back to reading  Esc", "返回阅读  Esc"),
@@ -102,7 +114,7 @@ final class ReferenceControls: OceanView, NSSearchFieldDelegate, NSTableViewData
             b.isHidden =
                 mode == .find
                 ? !["next", "clear"].contains(key)
-                : mode == .conversations ? key != "dismiss" : ["next", "clear"].contains(key)
+                : mode == .conversations ? key != "dismiss" : !actionKeys.contains(key)
         }
         more.isHidden = mode != .conversations || !hasMore
         titleLabel.stringValue =
@@ -136,14 +148,10 @@ final class ReferenceControls: OceanView, NSSearchFieldDelegate, NSTableViewData
             status.frame = NSRect(x: 12, y: 300, width: width, height: 42)
             buttons["dismiss"]?.frame = NSRect(x: 12, y: 346, width: width, height: 32)
         } else {
-            let actions = [
-                "duplicate", "refresh", "copy", "smaller", "larger", "collapse", "preferences", "setup",
-                "close", "dismiss",
-            ]
-            for (i, key) in actions.enumerated() {
+            for (i, key) in actionKeys.enumerated() {
                 buttons[key]?.frame = NSRect(x: 12, y: 40 + CGFloat(i) * 36, width: width, height: 32)
             }
-            status.frame = NSRect(x: 12, y: 406, width: width, height: 72)
+            status.frame = NSRect(x: 12, y: 46 + CGFloat(actionKeys.count) * 36, width: width, height: 72)
         }
         if mode != .conversations { more.frame = .zero }
     }

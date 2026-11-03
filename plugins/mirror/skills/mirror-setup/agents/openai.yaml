@@ -1,0 +1,4 @@
+interface:
+  display_name: "Set up Mirror"
+  short_description: "Check Mirror and guide first-run setup on Mac"
+  default_prompt: "Use $mirror-setup to check Mirror on this Mac and guide any missing setup."

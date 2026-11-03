@@ -1,8 +1,44 @@
 import AppKit
 import MirrorCore
 
+enum ReferenceEventRouter {
+    enum Action: Equatable {
+        case dismiss, duplicate, find, refresh, close, open
+    }
+
+    /// Pointer events still establish human priority, but only keyboard events have key fields.
+    static func route(
+        _ event: NSEvent, humanDidInteract: () -> Void,
+        dismissIfOutside: (NSEvent) -> Void, perform: (Action) -> Void
+    ) -> NSEvent? {
+        humanDidInteract()
+        if event.type == .leftMouseDown {
+            dismissIfOutside(event)
+            return event
+        }
+        guard event.type == .keyDown else { return event }
+        if event.keyCode == 53 {
+            perform(.dismiss)
+            return nil
+        }
+        guard event.modifierFlags.contains(.command) else { return event }
+        let action: Action
+        switch event.charactersIgnoringModifiers {
+        case "d": action = .duplicate
+        case "f": action = .find
+        case "r": action = .refresh
+        case "w": action = .close
+        case "n": action = .open
+        default: return event
+        }
+        perform(action)
+        return nil
+    }
+}
+
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
     var coordinator: WorkspaceCoordinator!
+    private var agentServer: AgentCommandServer?
     private var statusItem: NSStatusItem?
     private var shortcut: GlobalShortcut?
     private var eventMonitor: Any?
@@ -14,6 +50,7 @@ import MirrorCore
     private var readingStarted = false
     private var pendingURLs: [URL] = []
     private let setupKey = "mirror.setup.v1.seen"
+    private lazy var permissionDiagnostics = AccessibilityDiagnostics()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -42,6 +79,25 @@ import MirrorCore
         coordinator.report = { [weak self] message in self?.showMessage(message) }
         MirrorPreferences.applyAppearance()
         configureMenu()
+        if !preview && !args.contains(where: { $0.hasPrefix("--verify") }) {
+            _ = permissionDiagnostics.observe(granted: coordinator.monitor.trusted)
+            let server = AgentCommandServer(socketURL: mirrorAgentSocketURL()) { [weak self] request in
+                guard let self else { return AgentResponse(ok: false, status: "service_unavailable") }
+                guard self.readingStarted else {
+                    return self.coordinator.agentResponse(
+                        ok: false, status: "setup_required",
+                        message: "Finish Mirror's first-run setup before Agent control.")
+                }
+                return self.coordinator.handleAgent(request)
+            }
+            do {
+                try server.start()
+                agentServer = server
+            } catch {
+                coordinator.startupError =
+                    localized("Agent control unavailable: ", "Agent 控制暂不可用：") + error.localizedDescription
+            }
+        }
         uiObservers = [
             NotificationCenter.default.addObserver(
                 forName: .mirrorPreferencesChanged, object: nil, queue: .main
@@ -59,27 +115,30 @@ import MirrorCore
         ]
         shortcut = GlobalShortcut()
         shortcut?.onOpen = { [weak self] in self?.openReference() }
-        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown]) {
+        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [
+            .keyDown, .leftMouseDown, .rightMouseDown, .scrollWheel, .leftMouseDragged,
+        ]) {
             [weak self] event in
             guard let self, let reference = self.coordinator.keyReference else { return event }
-            if event.type == .leftMouseDown {
-                if event.window === reference.window { reference.surface.dismissIfOutside(event) }
-                return event
-            }
-            if event.keyCode == 53 {
-                reference.surface.dismiss()
-                return nil
-            }
-            guard event.modifierFlags.contains(.command) else { return event }
-            switch event.charactersIgnoringModifiers {
-            case "d": reference.act("duplicate")
-            case "f": reference.find()
-            case "r": reference.act("refresh")
-            case "w": reference.act("close")
-            case "n": self.coordinator.open()
-            default: return event
-            }
-            return nil
+            return ReferenceEventRouter.route(
+                event,
+                humanDidInteract: {
+                    self.coordinator.humanDidInteract()
+                    for reference in self.coordinator.windows.values { reference.surface.skipOpening() }
+                },
+                dismissIfOutside: { event in
+                    if event.window === reference.window { reference.surface.dismissIfOutside(event) }
+                },
+                perform: { action in
+                    switch action {
+                    case .dismiss: reference.surface.dismiss()
+                    case .duplicate: reference.act("duplicate")
+                    case .find: reference.find()
+                    case .refresh: reference.act("refresh")
+                    case .close: reference.act("close")
+                    case .open: self.coordinator.open()
+                    }
+                })
         }
         if args.contains("--benchmark") {
             PerformanceVerification.run()
@@ -137,7 +196,7 @@ import MirrorCore
         }
         if preview, coordinator.windows.isEmpty {
             coordinator.open(conversationID: "sample")
-        } else if coordinator.windows.isEmpty {
+        } else if coordinator.windows.isEmpty && !args.contains("--agent-launch") {
             coordinator.open()
         }
         if let error = coordinator.startupError { showMessage(error) }
@@ -182,6 +241,19 @@ import MirrorCore
             let entry = menu.addItem(withTitle: title, action: action, keyEquivalent: "")
             entry.target = self
         }
+        let agentToggle = NSMenuItem(
+            title: coordinator.agentEnabled
+                ? localized("Pause Agent control", "暂停 Agent 控制")
+                : localized("Resume Agent control", "恢复 Agent 控制"),
+            action: #selector(toggleAgentControl), keyEquivalent: "")
+        agentToggle.target = self
+        menu.insertItem(agentToggle, at: 4)
+        appMenu.insertItem(agentToggle.copy() as! NSMenuItem, at: 0)
+        let bind = NSMenuItem(
+            title: localized("Bind to Codex window", "绑定 Codex 窗口"),
+            action: #selector(bindHost), keyEquivalent: "")
+        bind.target = self
+        appMenu.insertItem(bind, at: 0)
         item.menu = menu
         statusItem = item
     }
@@ -189,7 +261,12 @@ import MirrorCore
         if preferences == nil { preferences = PreferencesWindow() }
         preferences?.present()
     }
+    @objc private func toggleAgentControl() {
+        coordinator.setAgentEnabled(!coordinator.agentEnabled)
+        configureMenu()
+    }
     @objc private func openReference() {
+        coordinator.humanDidInteract()
         guard readingStarted else {
             showSetup()
             return
@@ -227,10 +304,11 @@ import MirrorCore
                     self.coordinator.open(conversationID: isPreview ? "sample" : nil)
                 }
                 if let error = self.coordinator.startupError { self.showMessage(error) }
-            })
+            }, diagnostics: isPreview ? nil : permissionDiagnostics)
         setup?.present()
     }
     @objc private func openSelection() {
+        coordinator.humanDidInteract()
         if readingStarted { coordinator.open(fromSelection: true) } else { showSetup() }
     }
     @objc private func restoreHidden() {
@@ -272,8 +350,8 @@ import MirrorCore
     @objc private func about() {
         showMessage(
             localized(
-                "Mirror 0.2.1\nA second screen for your AI conversations.\n\n⌘D duplicates; ⌘F searches; ⌘R refreshes. History stays local.\n\nWindow following uses Accessibility. Remote images are not fetched.",
-                "Mirror 0.2.1\n把对话留在身边的独立参考窗口。\n\n⌘D 复制窗口，⌘F 查找，⌘R 刷新。历史内容保留在本机。\n\n窗口跟随需要辅助功能权限。不会自动下载远程图片。")
+                "Mirror 1.0.0\nA second screen for your AI conversations.\n\n⌘D duplicates; ⌘F searches; ⌘R refreshes. History stays local.\n\nWindow following uses Accessibility. Remote images are not fetched.",
+                "Mirror 1.0.0\n把对话留在身边的独立参考窗口。\n\n⌘D 复制窗口，⌘F 查找，⌘R 刷新。历史内容保留在本机。\n\n窗口跟随需要辅助功能权限。不会自动下载远程图片。")
         )
     }
     @objc private func quit() { NSApp.terminate(nil) }
@@ -290,6 +368,7 @@ import MirrorCore
         }
     }
     func application(_ application: NSApplication, open urls: [URL]) {
+        guard coordinator.agentEnabled else { return }
         guard readingStarted else {
             pendingURLs += urls
             showSetup()
@@ -303,6 +382,8 @@ import MirrorCore
         }
     }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        agentServer?.stop()
+        agentServer = nil
         if readingStarted { coordinator?.saveNow() }
         guard let adapter, !terminationReady else { return .terminateNow }
         Task {
