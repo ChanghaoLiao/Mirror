@@ -33,4 +33,4 @@ jobs:
           ditto --norsrc -x -k dist/Mirror.zip .build/ci-archive
           codesign --verify --strict .build/ci-archive/Mirror.app
           cmp dist/Mirror.app/Contents/MacOS/Mirror .build/ci-archive/Mirror.app/Contents/MacOS/Mirror
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' .build/ci-archive/Mirror.app/Contents/Info.plist)" = '0.2.1'
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' .build/ci-archive/Mirror.app/Contents/Info.plist)" = "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' scripts/Info.plist)"
