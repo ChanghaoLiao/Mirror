@@ -223,8 +223,11 @@ final class BlackboardOpening: NSView, CAAnimationDelegate {
             target.setValue(values.last, forKeyPath: key)
             target.add(animation, forKey: key)
         }
-        let wipePositions = zip(positions, progress).map { p, t in
-            NSValue(point: CGPoint(x: p.x - normal.x * 16 * (1 - t), y: p.y - normal.y * 16 * (1 - t)))
+        let wipePositions: [NSValue] = zip(positions, progress).map { position, amount in
+            let offset: CGFloat = 16 * (1 - amount)
+            let point = CGPoint(
+                x: position.x - normal.x * offset, y: position.y - normal.y * offset)
+            return NSValue(point: point)
         }
         animate(wipe, key: "position", values: wipePositions, complete: true)
         animate(eraser, key: "position", values: positions.map { NSValue(point: $0) })
